@@ -99,7 +99,7 @@ function main(){
 function keydown(ev){ //you may want to define more arguments for this function
     //implment keydown event here
     var colorType = ['r','g','b'];
-    var shapeType = ['p','h','v','t','q'];
+    var shapeType = ['p','h','v','t','q','c'];
     if(colorType.includes(ev.key)){ //an example for user press 'r'... 
         //......  
         colorFlag = ev.key;
@@ -156,6 +156,19 @@ function click(ev,canvas,gl,program){ //you may want to define more arguments fo
         if(g_squares.length == 30 * unit_n) g_squares.splice(0,30);
         xyrgb = xyrgb.concat([x-0.05,y+0.05],rgb,[x+0.05,y+0.05],rgb,[x-0.05,y-0.05],rgb,[x+0.05,y+0.05],rgb,[x-0.05,y-0.05],rgb,[x+0.05,y-0.05],rgb);
         g_squares = g_squares.concat(xyrgb);
+    }else if(shapeFlag == 'c'){
+        if(g_circles.length == (15*200) * unit_n) g_circles.splice(0,(15*200));
+        var r = 0.03;
+        for(var i = 0; i < 200; i ++){
+            var circle = [];
+            xyrgb = xyrgb.concat([x,y],rgb);
+            circle.push(x + r*Math.cos(i * Math.PI / 100),y + r*Math.sin(i * Math.PI / 100));
+            circle = circle.concat(rgb);
+            circle.push(x + r*Math.cos((i+1) * Math.PI / 100),y + r*Math.sin((i+1) * Math.PI / 100));
+            xyrgb = xyrgb.concat(circle,rgb);
+            console.log(xyrgb);
+        }
+        g_circles = g_circles.concat(xyrgb);
     }
 
     //self-define draw() function
@@ -254,4 +267,20 @@ function draw(gl,program){ //you may want to define more arguments for this func
 
     console.log("n: " + g_squares.length/5);
     gl.drawArrays(gl.TRIANGLES, 0, g_squares.length/5);
+
+    // square
+    var float_circles = new Float32Array(g_circles);
+    gl.bufferData(gl.ARRAY_BUFFER,float_circles , gl.STATIC_DRAW);
+    var FSIZE_circles = float_circles.BYTES_PER_ELEMENT;
+
+    var a_Position = gl.getAttribLocation(program, 'a_Position');
+    gl.vertexAttribPointer(a_Position, 2, gl.FLOAT, false, FSIZE_circles*5, 0);
+    gl.enableVertexAttribArray(a_Position);
+
+    var a_Color = gl.getAttribLocation(program, 'a_Color');
+    gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, FSIZE_circles*5, FSIZE_circles*2);
+    gl.enableVertexAttribArray(a_Color);
+
+    console.log("n: " + g_circles.length/5);
+    gl.drawArrays(gl.TRIANGLES, 0, g_circles.length/5);
 }
