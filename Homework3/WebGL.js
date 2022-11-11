@@ -1,9 +1,11 @@
 var VSHADER_SOURCE = `
+    precision mediump float;
     attribute vec4 a_Position;
     attribute vec4 a_Normal;
     attribute vec2 a_TexCoord;
     uniform mat4 u_MvpMatrix;
     uniform mat4 u_modelMatrix;
+    uniform mat4 u_lightMatrix;
     uniform mat4 u_normalMatrix;
     varying vec3 v_Normal;
     varying vec3 v_PositionInWorld;
@@ -18,19 +20,28 @@ var VSHADER_SOURCE = `
 
 var FSHADER_SOURCE = `
     precision mediump float;
-    uniform vec3 u_LightPosition;
+    uniform mat4 u_modelMatrix;
+    uniform mat4 u_lightMatrix;
     uniform vec3 u_ViewPosition;
     uniform float u_Ka;
     uniform float u_Kd;
     uniform float u_Ks;
     uniform float u_shininess;
     uniform int tex_mode;
+    uniform int is_light;
     uniform vec3 u_Color;
     uniform sampler2D u_Sampler0;
     varying vec3 v_Normal;
     varying vec3 v_PositionInWorld;
     varying vec2 v_TexCoord;
     void main(){
+        vec3 u_LightPosition;
+        if(is_light >= 1){
+            u_LightPosition = vec3(0.0,5.0,3.0);
+        }else{
+            u_LightPosition = (u_lightMatrix * vec4(0.0,2.0,1.0,1.0)).xyz;
+        }
+        
         // let ambient and diffuse color are u_Color 
         // (you can also input them from ouside and make them different)
         vec3 texColor;
@@ -59,8 +70,11 @@ var FSHADER_SOURCE = `
             float specAngle = clamp(dot(R, V), 0.0, 1.0);
             specular = u_Ks * pow(specAngle, u_shininess) * specularLightColor; 
         }
-
+        
         gl_FragColor = vec4( ambient + diffuse + specular, 1.0 );
+        if(is_light >= 1){
+            gl_FragColor = vec4(1.0,1.0,1.0, 1.0 );
+        }
     }
 `;
 
@@ -189,12 +203,15 @@ var disc = [];
 var vacuum = [];
 var pyramid = [];
 var sphere = [];
+var table = [];
+var chair = [];
 var textures = {};
 var texCount = 0;
 var numTextures = 1; //brick
 
 // Matrix pop and push
 var mdlMatrix = new Matrix4();
+var lightMatrix = new Matrix4();
 var matStack = [];
 var u_modelMatrix;
 function pushMatrix() {
@@ -277,7 +294,9 @@ async function main() {
     program.u_MvpMatrix = gl.getUniformLocation(program, "u_MvpMatrix");
     program.u_modelMatrix = gl.getUniformLocation(program, "u_modelMatrix");
     program.u_normalMatrix = gl.getUniformLocation(program, "u_normalMatrix");
-    program.u_LightPosition = gl.getUniformLocation(program, "u_LightPosition");
+    program.u_lightMatrix = gl.getUniformLocation(program, "u_lightMatrix");
+
+    //program.u_LightPosition = gl.getUniformLocation(program, "u_LightPosition");
     program.u_ViewPosition = gl.getUniformLocation(program, "u_ViewPosition");
     program.u_Ka = gl.getUniformLocation(program, "u_Ka");
     program.u_Kd = gl.getUniformLocation(program, "u_Kd");
@@ -286,6 +305,7 @@ async function main() {
     program.u_Sampler0 = gl.getUniformLocation(program, "u_Sampler0");
     program.u_Color = gl.getUniformLocation(program, "u_Color");
     program.tex_mode = gl.getUniformLocation(program, "tex_mode");
+    program.is_light = gl.getUniformLocation(program, "is_light");
 
     create_obj("cube.obj", ground, 0);
     create_obj("pyramid.obj", pyramid, 0);
@@ -296,9 +316,13 @@ async function main() {
     create_obj("vacuum.obj", vacuum, 0);
     create_obj("pyramid.obj", pyramid, 0);
     create_obj("sphere.obj", sphere, 0);
+    create_obj("table.obj", table, 0);
+    create_obj("chair.obj", chair, 0);
 
     bind_img_tex("chess.jpg", "chessTex");
     bind_img_tex("webglIcon.jpg", "webglIconTex");
+    bind_img_tex("plastic.jpg", "plasticTex");
+    bind_img_tex("Wood.jpg", "woodTex");
 
     mvpMatrix = new Matrix4();
     modelMatrix = new Matrix4();
@@ -322,17 +346,31 @@ function draw() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     //let mdlMatrix = new Matrix4(); //model matrix of objects
+    gl.uniform1i(program.is_light, 1);
+    mdlMatrix.setIdentity();
+    mdlMatrix.translate(0, 2, 1);
+    mdlMatrix.scale(0.2, 0.2, 0.2);
+    drawOneObject(sphere, "chessTex", mdlMatrix, 1, 1, 1, 1);
+    gl.uniform1i(program.is_light, 0);
 
-    //Cube (ground)
-    //TODO-1: set mdlMatrix for the cube
     mdlMatrix.setIdentity();
     mdlMatrix.scale(2, 0.1, 2);
-    drawOneObject(ground, "chessTex", mdlMatrix, 0, 1, 0, 0);
+    drawOneObject(ground, "chessTex", mdlMatrix, 1, 1, 0, 1);
+
+    mdlMatrix.setIdentity();
+    mdlMatrix.translate(1.5, -0.1, 1.5);
+    mdlMatrix.scale(0.6, 0.6, 0.6);
+    drawOneObject(table, "chessTex", mdlMatrix, 1, 0.3, 0.4, 0.6);
+
+    mdlMatrix.setIdentity();
+    mdlMatrix.translate(1.5, -0.1, 1);
+    mdlMatrix.scale(0.025, 0.025, 0.025);
+    drawOneObject(chair, "woodTex", mdlMatrix, 0, 0.3, 0.4, 0.6);
 
     mdlMatrix.setIdentity();
     mdlMatrix.translate(0 + tx, 0.14, 0 + tz);
     mdlMatrix.scale(0.4, 0.4, 0.4);
-    drawOneObject(vacuum, "chessTex", mdlMatrix, 1, 0, 1, 0);
+    drawOneObject(vacuum, "plasticTex", mdlMatrix, 0, 0, 1, 0);
 
     mdlMatrix.translate(-0.4, 0, 0);
     pushMatrix();
@@ -392,6 +430,10 @@ function drawOneObject(
     modelMatrix.setRotate(angleY, 1, 0, 0); //for mouse rotation
     modelMatrix.rotate(angleX, 0, 1, 0); //for mouse rotation
     modelMatrix.scale(zoom, zoom, zoom);
+
+    lightMatrix.setRotate(angleY, 1, 0, 0); //for mouse rotation
+    lightMatrix.rotate(angleX, 0, 1, 0); //for mouse rotation
+    lightMatrix.scale(zoom, zoom, zoom);
     //console.log(zoom);
     modelMatrix.multiply(mdlMatrix);
     //mvp: projection * view * model matrix
@@ -403,12 +445,16 @@ function drawOneObject(
     normalMatrix.setInverseOf(modelMatrix);
     normalMatrix.transpose();
 
-    gl.uniform3f(program.u_LightPosition, 0, 5, 3);
+    /*var ini_light = [0, 5, 3];
+    ini_light = modelMatrix * ini_light;
+    console.log(ini_light);*/
+
+    //gl.uniform3f(program.u_LightPosition, 0, 5, 3);
     gl.uniform3f(program.u_ViewPosition, cameraX, cameraY, cameraZ);
     gl.uniform1f(program.u_Ka, 0.2);
     gl.uniform1f(program.u_Kd, 0.7);
     gl.uniform1f(program.u_Ks, 1.0);
-    gl.uniform1f(program.u_shininess, 10.0);
+    gl.uniform1f(program.u_shininess, 100.0);
     gl.uniform1i(program.u_Sampler0, 0);
     gl.uniform1i(program.tex_mode, tex_mode);
     if (tex_mode == 1) {
@@ -418,6 +464,7 @@ function drawOneObject(
     gl.uniformMatrix4fv(program.u_MvpMatrix, false, mvpMatrix.elements);
     gl.uniformMatrix4fv(program.u_modelMatrix, false, modelMatrix.elements);
     gl.uniformMatrix4fv(program.u_normalMatrix, false, normalMatrix.elements);
+    gl.uniformMatrix4fv(program.u_lightMatrix, false, lightMatrix.elements);
 
     //gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
