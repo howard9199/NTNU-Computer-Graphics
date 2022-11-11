@@ -184,6 +184,8 @@ var angleX = 0,
 var zoom = 1;
 var tx = 0;
 var tz = 0;
+var joint1 = 0;
+var joint2 = 0;
 
 var gl, canvas;
 var mvpMatrix;
@@ -286,6 +288,18 @@ async function main() {
         draw();
     };
 
+    var j1Slider = document.getElementById("joint1");
+    j1Slider.oninput = function () {
+        joint1 = this.value / 1.0; //convert sliders value to -1 to +1
+        draw();
+    };
+
+    var j2Slider = document.getElementById("joint2");
+    j2Slider.oninput = function () {
+        joint2 = this.value / 1.0; //convert sliders value to -1 to +1
+        draw();
+    };
+
     gl.useProgram(program);
 
     program.a_Position = gl.getAttribLocation(program, "a_Position");
@@ -355,7 +369,7 @@ function draw() {
 
     mdlMatrix.setIdentity();
     mdlMatrix.scale(2, 0.1, 2);
-    drawOneObject(ground, "chessTex", mdlMatrix, 1, 1, 0, 1);
+    drawOneObject(ground, "chessTex", mdlMatrix, 0, 1, 0, 1);
 
     mdlMatrix.setIdentity();
     mdlMatrix.translate(1.5, -0.1, 1.5);
@@ -379,7 +393,7 @@ function draw() {
     popMatrix();
 
     mdlMatrix.translate(0, 0.3, 0);
-    mdlMatrix.rotate(tx * 30, 0, 0, 1);
+    mdlMatrix.rotate(tx * 30 + joint1, 0, 0, 1);
     mdlMatrix.translate(0, 0.6, 0);
     pushMatrix();
     mdlMatrix.scale(0.1, 0.5, 0.1);
@@ -392,7 +406,7 @@ function draw() {
     drawOneObject(sphere, "chessTex", mdlMatrix, 1, 1, 1, 1);
     popMatrix();
 
-    mdlMatrix.rotate(tz * 30, 1, 0, 0);
+    mdlMatrix.rotate(tz * 30 + joint2, 1, 0, 0);
     mdlMatrix.translate(0, 0.3, 0);
     pushMatrix();
     mdlMatrix.scale(0.071, 0.001, 0.071);
