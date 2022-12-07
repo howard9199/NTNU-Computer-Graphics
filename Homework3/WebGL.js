@@ -145,26 +145,9 @@ function initVertexBufferForLaterUse(gl, vertices, normals, texCoords) {
     var nVertices = vertices.length / 3;
 
     var o = new Object();
-    o.vertexBuffer = initArrayBufferForLaterUse(
-        gl,
-        new Float32Array(vertices),
-        3,
-        gl.FLOAT
-    );
-    if (normals != null)
-        o.normalBuffer = initArrayBufferForLaterUse(
-            gl,
-            new Float32Array(normals),
-            3,
-            gl.FLOAT
-        );
-    if (texCoords != null)
-        o.texCoordBuffer = initArrayBufferForLaterUse(
-            gl,
-            new Float32Array(texCoords),
-            2,
-            gl.FLOAT
-        );
+    o.vertexBuffer = initArrayBufferForLaterUse(gl, new Float32Array(vertices), 3, gl.FLOAT);
+    if (normals != null) o.normalBuffer = initArrayBufferForLaterUse(gl, new Float32Array(normals), 3, gl.FLOAT);
+    if (texCoords != null) o.texCoordBuffer = initArrayBufferForLaterUse(gl, new Float32Array(texCoords), 2, gl.FLOAT);
     //you can have error check here
     o.numVertices = nVertices;
 
@@ -229,15 +212,9 @@ async function create_obj(obj_name, objComponents, limit_mode, limit_obj) {
     obj = parseOBJ(text);
 
     for (let i = 0; i < obj.geometries.length; i++) {
-        if (
-            limit_mode == 1 &&
-            limit_obj.indexOf(obj.geometries[i].object) != -1
-        ) {
+        if (limit_mode == 1 && limit_obj.indexOf(obj.geometries[i].object) != -1) {
             continue;
-        } else if (
-            limit_mode == 2 &&
-            limit_obj.indexOf(obj.geometries[i].object) == -1
-        ) {
+        } else if (limit_mode == 2 && limit_obj.indexOf(obj.geometries[i].object) == -1) {
             continue;
         }
         let o = initVertexBufferForLaterUse(
@@ -431,15 +408,7 @@ function draw() {
 //obj: the object components
 //mdlMatrix: the model matrix without mouse rotation
 //colorR, G, B: object color
-function drawOneObject(
-    obj,
-    tex_name,
-    mdlMatrix,
-    tex_mode,
-    colorR,
-    colorG,
-    colorB
-) {
+function drawOneObject(obj, tex_name, mdlMatrix, tex_mode, colorR, colorG, colorB) {
     //model Matrix (part of the mvp matrix)
     modelMatrix.setRotate(angleY, 1, 0, 0); //for mouse rotation
     modelMatrix.rotate(angleX, 0, 1, 0); //for mouse rotation
@@ -553,8 +522,7 @@ function parseOBJ(text) {
                 return;
             }
             const objIndex = parseInt(objIndexStr);
-            const index =
-                objIndex + (objIndex >= 0 ? 0 : objVertexData[i].length);
+            const index = objIndex + (objIndex >= 0 ? 0 : objVertexData[i].length);
             webglVertexData[i].push(...objVertexData[i][index]);
         });
     }
@@ -622,11 +590,7 @@ function parseOBJ(text) {
 
     // remove any arrays that have no entries.
     for (const geometry of geometries) {
-        geometry.data = Object.fromEntries(
-            Object.entries(geometry.data).filter(
-                ([, array]) => array.length > 0
-            )
-        );
+        geometry.data = Object.fromEntries(Object.entries(geometry.data).filter(([, array]) => array.length > 0));
     }
 
     return {
