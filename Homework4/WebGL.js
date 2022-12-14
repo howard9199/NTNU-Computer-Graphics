@@ -981,9 +981,9 @@ function initCubeTexture(posXName, negXName, posYName, negYName, posZName, negZN
         var image = new Image();
         image.onload = function () {
             gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
             gl.texImage2D(target, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-            wait(100);
         };
         image.src = fName;
     });
