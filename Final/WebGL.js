@@ -542,11 +542,11 @@ function draw() {
     sphereMatrix.scale(0.2, 0.2, 0.2);
     let sphereMvpFromLight = new Matrix4(); //drawOffScreen(sphere, sphereMatrix);
 
-    let cubeMatrix = new Matrix4();
+    /*let cubeMatrix = new Matrix4();
     cubeMatrix.setIdentity();
     cubeMatrix.translate(1.5, 1.3, 1.6);
     cubeMatrix.scale(0.2, 0.2, 0.2);
-    let cubeMvpFromLight = drawOffScreen(ground, cubeMatrix);
+    let cubeMvpFromLight = drawOffScreen(ground, cubeMatrix);*/
 
     let groundMatrix = new Matrix4();
     groundMatrix.setIdentity();
@@ -630,7 +630,7 @@ function draw() {
 
     //
     gl.useProgram(program);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, cubebo);
+    /*gl.bindFramebuffer(gl.FRAMEBUFFER, cubebo);
     gl.viewport(0, 0, offScreenWidth, offScreenHeight);
     //gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.4, 0.4, 0.4, 1);
@@ -644,7 +644,7 @@ function draw() {
     drawOneObject(ground, "chessTex", cubeMatrix, cubeMvpFromLight, 1, 1, 0, 1);
     drawOneObject(ground, "chessTex", groundMatrix, groundMvpFromLight, 0, 1, 0, 1);
     drawOneObject(sonic, "chessTex", sonicMatrix, sonicMvpFromLight, 1, 1, 0, 1);
-    drawOneObject(bomb, "chessTex", bombMatrix, bombMvpFromLight, 1, 0, 0, 0);
+    drawOneObject(bomb, "chessTex", bombMatrix, bombMvpFromLight, 1, 0, 0, 0);*/
     /*drawOneObject(table, "tableTex", tableMatrix, tableMvpFromLight, 0, 0.3, 0.4, 0.6);
     drawOneObject(chair, "woodTex", chairMatrix, chairMvpFromLight, 0, 0.3, 0.4, 0.6);
     drawOneObject(vacuum, "plasticTex", vacuumMatrix, vacuumMvpFromLight, 0, 0, 1, 0);
@@ -655,13 +655,13 @@ function draw() {
     drawOneObject(cylinder, "chessTex", cylinderMatrix, cylinderMvpFromLight, 1, 1, 0, 0);*/
 
     fixed = 0;
-    textures["cubeTex"] = cubebo.texture;
+    //textures["cubeTex"] = cubebo.texture;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.uniform1i(program.is_light, 1);
     drawOneObject(sphere, "chessTex", sphereMatrix, sphereMvpFromLight, 1, 1, 1, 1);
     gl.uniform1i(program.is_light, 0);
-    drawOneObject(ground, "cubeTex", cubeMatrix, cubeMvpFromLight, 0, 1, 0, 1);
+    //drawOneObject(ground, "cubeTex", cubeMatrix, cubeMvpFromLight, 0, 1, 0, 1);
     drawOneObject(ground, "chessTex", groundMatrix, groundMvpFromLight, 0, 1, 0, 1);
     drawOneObject(sonic, "chessTex", sonicMatrix, sonicMvpFromLight, 1, 1, 0, 1);
     drawOneObject(bomb, "chessTex", bombMatrix, bombMvpFromLight, 1, 0, 0, 0);
