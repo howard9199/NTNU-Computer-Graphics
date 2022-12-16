@@ -3,6 +3,9 @@ var VSHADER_SOURCE = `
     attribute vec4 a_Position;
     attribute vec4 a_Normal;
     attribute vec2 a_TexCoord;
+    attribute vec3 a_Tagent;
+    attribute vec3 a_Bitagent;
+    attribute float a_crossTexCoord;
     uniform mat4 u_MvpMatrix;
     uniform mat4 u_modelMatrix;
     uniform mat4 u_lightMatrix;
@@ -13,12 +16,26 @@ var VSHADER_SOURCE = `
     varying vec3 v_Normal;
     varying vec3 v_PositionInWorld;
     varying vec2 v_TexCoord;
+    varying mat4 v_TBN;
     void main(){
         gl_Position = u_MvpMatrix * a_Position;
         v_PositionInWorld = (u_modelMatrix * a_Position).xyz; 
         v_Normal = normalize(vec3(u_normalMatrix * a_Normal));
         v_TexCoord = a_TexCoord;
         v_PositionFromLight = u_MvpMatrixOfLight * a_Position; //for shadow
+        //create TBN matrix 
+        vec3 tagent = normalize(a_Tagent);
+        vec3 bitagent = normalize(a_Bitagent);
+        vec3 nVector;
+        if( a_crossTexCoord > 0.0){
+          nVector = cross(tagent, bitagent);
+        } else{
+          nVector = cross(bitagent, tagent);
+        }
+        v_TBN = mat4(tagent.x, tagent.y, tagent.z, 0.0, 
+                           bitagent.x, bitagent.y, bitagent.z, 0.0,
+                           nVector.x, nVector.y, nVector.z, 0.0, 
+                           0.0, 0.0, 0.0, 1.0);
     }    
 `;
 
@@ -35,11 +52,16 @@ var FSHADER_SOURCE = `
     uniform int is_light;
     uniform vec3 u_Color;
     uniform sampler2D u_Sampler0;
+    uniform sampler2D u_Sampler2;
     uniform sampler2D u_ShadowMap;
+    uniform mat4 u_normalMatrix;
+    uniform bool u_normalMode;
     varying vec3 v_Normal;
     varying vec3 v_PositionInWorld;
     varying vec2 v_TexCoord;
     varying vec4 v_PositionFromLight;
+    varying mat4 v_TBN;
+
     const float deMachThreshold = 0.005; //0.001 if having high precision depth
     void main(){
         vec3 u_LightPosition;
@@ -64,7 +86,17 @@ var FSHADER_SOURCE = `
 
         vec3 ambient = ambientLightColor * u_Ka;
 
-        vec3 normal = normalize(v_Normal);
+        //vec3 normal = normalize(v_Normal);
+        vec3 normal;
+        if( u_normalMode ){
+          //3D object's normal vector
+          normal = normalize(v_Normal);
+        }else{
+        //normal vector from normal map
+          vec3 nMapNormal = normalize( texture2D( u_Sampler2, v_TexCoord ).rgb * 2.0 - 1.0 );
+          normal = normalize( vec3( u_normalMatrix * v_TBN * vec4( nMapNormal, 1.0) ) );
+        }
+
         vec3 lightDirection = normalize(u_LightPosition - v_PositionInWorld);
         float nDotL = max(dot(lightDirection, normal), 0.0);
         vec3 diffuse = diffuseLightColor * u_Kd * nDotL;
@@ -190,7 +222,26 @@ function initArrayBufferForLaterUse(gl, data, num, type) {
     return buffer;
 }
 
-function initVertexBufferForLaterUse(gl, vertices, normals, texCoords) {
+function initVertexBufferForLaterUse(gl, vertices, normals, texCoords, tagents, bitagents, crossTexCoords) {
+    var nVertices = vertices.length / 3;
+
+    var o = new Object();
+    o.vertexBuffer = initArrayBufferForLaterUse(gl, new Float32Array(vertices), 3, gl.FLOAT);
+    if (normals != null) o.normalBuffer = initArrayBufferForLaterUse(gl, new Float32Array(normals), 3, gl.FLOAT);
+    if (texCoords != null) o.texCoordBuffer = initArrayBufferForLaterUse(gl, new Float32Array(texCoords), 2, gl.FLOAT);
+    if (tagents != null) o.tagentsBuffer = initArrayBufferForLaterUse(gl, new Float32Array(tagents), 3, gl.FLOAT);
+    if (bitagents != null) o.bitagentsBuffer = initArrayBufferForLaterUse(gl, new Float32Array(bitagents), 3, gl.FLOAT);
+    if (crossTexCoords != null)
+        o.crossTexCoordsBuffer = initArrayBufferForLaterUse(gl, new Float32Array(crossTexCoords), 1, gl.FLOAT);
+    //you can have error check here
+    o.numVertices = nVertices;
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+    return o;
+}
+/*function initVertexBufferForLaterUse(gl, vertices, normals, texCoords) {
     var nVertices = vertices.length / 3;
 
     var o = new Object();
@@ -204,7 +255,8 @@ function initVertexBufferForLaterUse(gl, vertices, normals, texCoords) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
     return o;
-}
+}*/
+
 /////END://///////////////////////////////////////////////////////////////////////////////////////////////
 /////The folloing three function is for creating vertex buffer, but link to shader to user later//////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -292,11 +344,15 @@ async function create_obj(obj_name, objComponents, limit_mode, limit_obj) {
         } else if (limit_mode == 2 && limit_obj.indexOf(obj.geometries[i].object) == -1) {
             continue;
         }
+        let tagentSpace = calculateTangentSpace(obj.geometries[i].data.position, obj.geometries[i].data.texcoord);
         let o = initVertexBufferForLaterUse(
             gl,
             obj.geometries[i].data.position,
             obj.geometries[i].data.normal,
-            obj.geometries[i].data.texcoord
+            obj.geometries[i].data.texcoord,
+            tagentSpace.tagents,
+            tagentSpace.bitagents,
+            tagentSpace.crossTexCoords
         );
         objComponents.push(o);
     }
@@ -385,10 +441,14 @@ async function main() {
     program.a_Position = gl.getAttribLocation(program, "a_Position");
     program.a_TexCoord = gl.getAttribLocation(program, "a_TexCoord");
     program.a_Normal = gl.getAttribLocation(program, "a_Normal");
+    program.a_Tagent = gl.getAttribLocation(program, "a_Tagent");
+    program.a_Bitagent = gl.getAttribLocation(program, "a_Bitagent");
+    program.a_crossTexCoord = gl.getAttribLocation(program, "a_crossTexCoord");
     program.u_MvpMatrix = gl.getUniformLocation(program, "u_MvpMatrix");
     program.u_modelMatrix = gl.getUniformLocation(program, "u_modelMatrix");
     program.u_normalMatrix = gl.getUniformLocation(program, "u_normalMatrix");
     program.u_lightMatrix = gl.getUniformLocation(program, "u_lightMatrix");
+    program.u_normalMode = gl.getUniformLocation(program, "u_normalMode");
 
     //program.u_LightPosition = gl.getUniformLocation(program, "u_LightPosition");
     program.u_ViewPosition = gl.getUniformLocation(program, "u_ViewPosition");
@@ -399,12 +459,13 @@ async function main() {
     program.u_shininess = gl.getUniformLocation(program, "u_shininess");
     program.u_ShadowMap = gl.getUniformLocation(program, "u_ShadowMap");
     program.u_Sampler0 = gl.getUniformLocation(program, "u_Sampler0");
+    program.u_Sampler2 = gl.getUniformLocation(program, "u_Sampler2");
     program.u_Color = gl.getUniformLocation(program, "u_Color");
     program.tex_mode = gl.getUniformLocation(program, "tex_mode");
     program.is_light = gl.getUniformLocation(program, "is_light");
 
     create_obj("sonic.obj", sonic, 0);
-    create_obj("./obj/bombe-mario-obj/bombe-mario.obj", bomb, 0);
+    create_obj("./obj/bomb-obj/bomb.obj", bomb, 0);
 
     create_obj("cube.obj", ground, 0);
     create_obj("pyramid.obj", pyramid, 0);
@@ -433,6 +494,8 @@ async function main() {
     bind_img_tex("./texture/mine/mine5.jpg", "mine5Tex");
     bind_img_tex("./texture/mine/grass.jpg", "grassTex");
     bind_img_tex("./texture/mine/ongrass.jpg", "ongrassTex");
+    bind_img_tex("./normalmap/foxnormal.jpeg", "normalmap");
+    bind_img_tex("./normalmap/hole.png", "holenormal");
 
     mvpMatrix = new Matrix4();
     modelMatrix = new Matrix4();
@@ -464,6 +527,7 @@ async function main() {
 
 function draw() {
     ///// off scree shadow
+    normalMode = 1;
     gl.useProgram(shadowProgram);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.viewport(0, 0, offScreenWidth, offScreenHeight);
@@ -498,9 +562,9 @@ function draw() {
     let bombMatrix = new Matrix4();
     bombMatrix.setIdentity();
     bombMatrix.scale(0.05, 0.05, 0.05);
-    bombMatrix.translate(shiftX * 100, 19, shiftZ * 100);
-    bombMatrix.rotate(rotatebomb, 0, 1, 0);
-    bombMatrix.translate(0, 0.1, 0.1);
+    bombMatrix.translate(shiftX * 20, 0, shiftZ * 20);
+    bombMatrix.rotate(rotatebomb * 10, 0, 1, 0);
+    bombMatrix.translate(0, 5, 12);
     let bombMvpFromLight = drawOffScreen(bomb, bombMatrix);
 
     /*let tableMatrix = new Matrix4();
@@ -580,7 +644,7 @@ function draw() {
     drawOneObject(ground, "chessTex", cubeMatrix, cubeMvpFromLight, 1, 1, 0, 1);
     drawOneObject(ground, "chessTex", groundMatrix, groundMvpFromLight, 0, 1, 0, 1);
     drawOneObject(sonic, "chessTex", sonicMatrix, sonicMvpFromLight, 1, 1, 0, 1);
-    drawOneObject(bomb, "chessTex", bombMatrix, bombMvpFromLight, 1, 1, 0, 1);
+    drawOneObject(bomb, "chessTex", bombMatrix, bombMvpFromLight, 1, 0, 0, 0);
     /*drawOneObject(table, "tableTex", tableMatrix, tableMvpFromLight, 0, 0.3, 0.4, 0.6);
     drawOneObject(chair, "woodTex", chairMatrix, chairMvpFromLight, 0, 0.3, 0.4, 0.6);
     drawOneObject(vacuum, "plasticTex", vacuumMatrix, vacuumMvpFromLight, 0, 0, 1, 0);
@@ -600,10 +664,10 @@ function draw() {
     drawOneObject(ground, "cubeTex", cubeMatrix, cubeMvpFromLight, 0, 1, 0, 1);
     drawOneObject(ground, "chessTex", groundMatrix, groundMvpFromLight, 0, 1, 0, 1);
     drawOneObject(sonic, "chessTex", sonicMatrix, sonicMvpFromLight, 1, 1, 0, 1);
-    drawOneObject(bomb, "chessTex", bombMatrix, bombMvpFromLight, 1, 1, 0, 1);
+    drawOneObject(bomb, "chessTex", bombMatrix, bombMvpFromLight, 1, 0, 0, 0);
 
     let mineMatrix = new Matrix4();
-
+    normalMode = 0;
     for (let i = 0; i < 12; i++) {
         mineMatrix.setIdentity();
         mineMatrix.scale(0.16, 0.01, 0.16);
@@ -614,6 +678,7 @@ function draw() {
             mineMatrix.translate(2, 0, 0);
         }
     }
+    normalMode = 1;
 
     let dirtMatrix = new Matrix4();
 
@@ -776,6 +841,7 @@ function drawOneObject(obj, tex_name, mdlMatrix, mvpFromLight, tex_mode, colorR,
     gl.uniform1f(program.u_Ks, 1.0);
     gl.uniform1f(program.u_shininess, 100.0);
     gl.uniform1i(program.u_Sampler0, 0);
+    gl.uniform1i(program.u_Sampler2, 2);
     gl.uniform1i(program.u_ShadowMap, 1);
     gl.uniform1i(program.tex_mode, tex_mode);
     if (tex_mode == 1) {
@@ -787,6 +853,8 @@ function drawOneObject(obj, tex_name, mdlMatrix, mvpFromLight, tex_mode, colorR,
     gl.uniformMatrix4fv(program.u_normalMatrix, false, normalMatrix.elements);
     gl.uniformMatrix4fv(program.u_lightMatrix, false, lightMatrix.elements);
     gl.uniformMatrix4fv(program.u_MvpMatrixOfLight, false, mvpFromLight.elements);
+    gl.uniform1i(program.u_normalMode, normalMode);
+    gl.uniform1i(program.u_Sampler1, 1);
 
     //gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -794,11 +862,16 @@ function drawOneObject(obj, tex_name, mdlMatrix, mvpFromLight, tex_mode, colorR,
     gl.bindTexture(gl.TEXTURE_2D, textures[tex_name]);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, textures["holenormal"]); // problem fbo.texture?
 
     for (let i = 0; i < obj.length; i++) {
         initAttributeVariable(gl, program.a_Position, obj[i].vertexBuffer);
         initAttributeVariable(gl, program.a_TexCoord, obj[i].texCoordBuffer);
         initAttributeVariable(gl, program.a_Normal, obj[i].normalBuffer);
+        initAttributeVariable(gl, program.a_Tagent, obj[i].tagentsBuffer);
+        initAttributeVariable(gl, program.a_Bitagent, obj[i].bitagentsBuffer);
+        initAttributeVariable(gl, program.a_crossTexCoord, obj[i].crossTexCoordsBuffer);
         gl.drawArrays(gl.TRIANGLES, 0, obj[i].numVertices);
     }
 }
@@ -1184,4 +1257,66 @@ function initCubeTexture(posXName, negXName, posYName, negYName, posZName, negZN
     gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
 
     return texture;
+}
+
+function calculateTangentSpace(position, texcoord) {
+    //iterate through all triangles
+    let tagents = [];
+    let bitagents = [];
+    let crossTexCoords = [];
+    for (let i = 0; i < position.length / 9; i++) {
+        let v00 = position[i * 9 + 0];
+        let v01 = position[i * 9 + 1];
+        let v02 = position[i * 9 + 2];
+        let v10 = position[i * 9 + 3];
+        let v11 = position[i * 9 + 4];
+        let v12 = position[i * 9 + 5];
+        let v20 = position[i * 9 + 6];
+        let v21 = position[i * 9 + 7];
+        let v22 = position[i * 9 + 8];
+        let uv00 = texcoord[i * 6 + 0];
+        let uv01 = texcoord[i * 6 + 1];
+        let uv10 = texcoord[i * 6 + 2];
+        let uv11 = texcoord[i * 6 + 3];
+        let uv20 = texcoord[i * 6 + 4];
+        let uv21 = texcoord[i * 6 + 5];
+
+        let deltaPos10 = v10 - v00;
+        let deltaPos11 = v11 - v01;
+        let deltaPos12 = v12 - v02;
+        let deltaPos20 = v20 - v00;
+        let deltaPos21 = v21 - v01;
+        let deltaPos22 = v22 - v02;
+
+        let deltaUV10 = uv10 - uv00;
+        let deltaUV11 = uv11 - uv01;
+        let deltaUV20 = uv20 - uv00;
+        let deltaUV21 = uv21 - uv01;
+
+        let r = 1.0 / (deltaUV10 * deltaUV21 - deltaUV11 * deltaUV20);
+        for (let j = 0; j < 3; j++) {
+            crossTexCoords.push(deltaUV10 * deltaUV21 - deltaUV11 * deltaUV20);
+        }
+        let tangentX = (deltaPos10 * deltaUV21 - deltaPos20 * deltaUV11) * r;
+        let tangentY = (deltaPos11 * deltaUV21 - deltaPos21 * deltaUV11) * r;
+        let tangentZ = (deltaPos12 * deltaUV21 - deltaPos22 * deltaUV11) * r;
+        for (let j = 0; j < 3; j++) {
+            tagents.push(tangentX);
+            tagents.push(tangentY);
+            tagents.push(tangentZ);
+        }
+        let bitangentX = (deltaPos20 * deltaUV10 - deltaPos10 * deltaUV20) * r;
+        let bitangentY = (deltaPos21 * deltaUV10 - deltaPos11 * deltaUV20) * r;
+        let bitangentZ = (deltaPos22 * deltaUV10 - deltaPos12 * deltaUV20) * r;
+        for (let j = 0; j < 3; j++) {
+            bitagents.push(bitangentX);
+            bitagents.push(bitangentY);
+            bitagents.push(bitangentZ);
+        }
+    }
+    let obj = {};
+    obj["tagents"] = tagents;
+    obj["bitagents"] = bitagents;
+    obj["crossTexCoords"] = crossTexCoords;
+    return obj;
 }
